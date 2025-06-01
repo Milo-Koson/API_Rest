@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Customer Search</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+  <style>
+    body {
+      font-family: 'Courier New', sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+
+    .custom-header {
+      background-color: #61dafb;
+      padding: 50px 20px; /* Ajustez la hauteur de la section selon vos besoins */
+      color: #fff;
+    }
+
+    .custom-header h1 {
+      margin: 0;
+      font-size: 36px;
+    }
+
+    input {
+      padding: 8px;
+      margin: 10px;
+    }
+
+    button {
+      padding: 8px;
+      cursor: pointer;
+    }
+
+    table {
+      width: 60%;
+      margin: 20px auto;
+      border-collapse: collapse;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      padding: 12px;
+      text-align: left;
+      border: none;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      border-bottom: 2px solid #ddd;
+    }
+
+    tr:hover {
+      background-color: #f2f9fe;
+    }
+
+    .no-results {
+      color: #d9534f;
+      font-weight: bold;
+    }
+  </style>
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+</head>
+<body>
+<div class="custom-header">
+  <h1>Customer Search</h1>
+</div>
+
+<input type="text" id="searchInput" placeholder="Enter search criteria" onkeydown="if (event.key === 'Enter') performSearch()">
+<button id="searchButton" class="btn btn-primary" onclick="performSearch()">Search</button>
+
+<div id="resultsContainer">
+  <h2 class="text-center">Results</h2>
+  <table id="resultsTable" class="table" style="width: 90%;">
+    <thead>
+    <tr>
+      <th class="text-center">Account No</th>
+      <th class="text-center">First Name</th>
+      <th class="text-center">Last Name</th>
+    </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="pagination" class="text-center" style="margin-top: 20px;"></div>
+
+  <p id="noResultsMessage" class="no-results" style="display: none;">No results found.</p>
+  <p id="errorMessage" class="no-results" style="display: none;">Please enter search criteria.</p>
+</div>
+
+<script>
+  var currentPage = 1;
+  var pageSize = 10; // Nombre de résultats par page
+  $(document).ready(function () {
+    // Ajoutez une logique de clic sur une ligne du tableau des résultats
+    $("#resultsTable").on("click", "tbody tr", function () {
+      var accountNo = $(this).find("td:eq(0)").text(); // Employee No
+      var firstName = $(this).find("td:eq(1)").text(); // First Name
+      var lastName = $(this).find("td:eq(2)").text(); // Last Name
+
+      // Redirection vers la page de détails de l'employé avec les paramètres
+      window.location.href = "http://localhost:8081/v1.0/customers/" + accountNo;
+    });
+  });
+
+  function performSearch() {
+    var searchCriteria = $("#searchInput").val();
+
+    if (searchCriteria.trim() === "") {
+      $.ajax({
+        url: 'http://localhost:8080/v1.0/customers',
+        type: 'GET',
+        dataType: 'json',
+        success: function (allData) {
+          updateResultsTable(allData);
+        },
+        error: function (error) {
+          console.error("Error retrieving all users:", error);
+        }
+      });
+      return;
+    }
+
+    $.ajax({
+      url: 'http://localhost:8080/v1.0/search/' + searchCriteria,
+      type: 'GET',
+      dataType: 'json',
+      success: function (data) {
+        updateResultsTable(data);
+        updatePagination(data.length); // Mettre à jour la pagination en fonction des données reçues
+      },
+      error: function (error) {
+        console.error("Error performing search:", error);
+      }
+    });
+  }
+
+  // Fonction de gestion de la pagination
+  $("#pagination").on("click", "button", function () {
+    var direction = $(this).data("direction");
+    if (direction === "prev" && currentPage > 1) {
+      currentPage--;
+    } else if (direction === "next") {
+      currentPage++;
+    }
+    performSearch(); // Appeler performSearch à chaque clic sur les boutons de pagination
+  });
+
+  function updateResultsTable(resultsData) {
+    var resultsTable = $("#resultsTable");
+    var noResultsMessage = $("#noResultsMessage");
+    var errorMessage = $("#errorMessage");
+
+    resultsTable.find("tbody tr").remove();
+    noResultsMessage.hide();
+    errorMessage.hide();
+
+    var startIndex = (currentPage - 1) * pageSize;
+    var endIndex = Math.min(startIndex + pageSize, resultsData.length);
+
+    if (endIndex > startIndex) {
+      for (var i = startIndex; i < endIndex; i++) {
+        var result = resultsData[i];
+        resultsTable.append("<tr><td class=\"text-center\">" + result.accountNo + "</td><td class=\"text-center\">" + result.firstName + "</td><td class=\"text-center\">" + result.lastName + "</td></tr>");
+      }
+    } else {
+      noResultsMessage.show();
+    }
+
+    // Mettre à jour la pagination
+    updatePagination(resultsData.length);
+  }
+
+  function updatePagination(totalResults) {
+    var totalPages = Math.ceil(totalResults / pageSize);
+    var paginationHtml = '<button class="btn btn-secondary" data-direction="prev">&laquo; Prev</button>';
+    paginationHtml += '<span style="margin: 0 10px;">Page ' + currentPage + ' of ' + totalPages + '</span>';
+    paginationHtml += '<button class="btn btn-secondary" data-direction="next">Next &raquo;</button>';
+    $("#pagination").html(paginationHtml);
+  }
+
+</script>
+</body>
+</html>

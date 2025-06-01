@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Order Form</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: 'Courier New', sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+        }
+
+        .custom-header {
+            background-color: #61dafb;
+            padding: 50px 20px; /* Ajustez la hauteur de la section selon vos besoins */
+            color: #fff;
+        }
+
+        .custom-header h1 {
+            margin: 0;
+            font-size: 36px;
+        }
+
+        input, select {
+            padding: 8px;
+            margin: 10px;
+            width: calc(100% - 20px); /* Prendre en compte la marge */
+        }
+
+        button {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border: none;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            border-bottom: 2px solid #ddd;
+        }
+
+        tr:hover {
+            background-color: #f2f9fe;
+        }
+
+        .no-results {
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        .quantity-column {
+            width: 20%; /* Ajuste la largeur de la colonne Quantity */
+        }
+
+        .table-container-left {
+            width: 40%; /* Ajuste la largeur de la table container gauche */
+            float: left; /* Aligne la table container gauche sur la partie gauche de la page */
+            margin-right: 150px; /* Ajoute une marge à droite pour l'espace */
+        }
+
+        .table-container-right {
+            width: 100%; /* Ajuste la largeur de la table container droite */
+            float: right; /* Aligne la table container droite sur la partie droite de la page */
+            margin-left: 10px; /* Ajoute une marge à gauche pour l'espace */
+        }
+
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script>
+        $(document).ready(function() {
+
+            var url = window.location.href;
+            var parts = url.split('/');
+            var orderId = parts[parts.length - 2]; // L'avant-dernier élément de l'URL
+            var accountNo = parts[parts.length - 3];
+            var optionsUpdated = false;
+
+            // Fonction pour mettre à jour les options des menus déroulants et les champs en fonction de la valeur de Order Status
+            function updateDropdownOptions() {
+                if (!optionsUpdated) {
+                    $.ajax({
+                        url: 'http://localhost:8080/v1.0/products',
+                        type: 'GET',
+                        success: function (data) {
+                            // Stocker les données des produits dans les variables globales
+                            productCodeOptions = data.map(function (product) {
+                                return '<option value="' + product.productId + '">' + product.productId + '</option>';
+                            }).join('');
+                            productNameOptions = data.map(function (product) {
+                                return '<option value="' + product.productName + '">' + product.productName + '</option>';
+                            }).join('');
+                        },
+                        error: function (xhr, status, error) {
+                            console.error('Error fetching product names:', error);
+                        }
+                    });
+
+                    $.ajax({
+                        url: 'http://localhost:8080/v1.0/orders/orderStatuses',
+                        type: 'GET',
+                        success: function (orderStatuses) {
+                            // Créer une option pour chaque statut de commande
+                            var options = '';
+                            orderStatuses.forEach(function (status) {
+                                options += '<option value="' + status.orderStatusId + '">' + status.orderStatusName + '</option>';
+                            });
+
+                            // Mettre à jour le menu déroulant avec les options créées
+                            $('#orderStatusSelect').append(options);
+
+                            // Mettre à jour le drapeau pour indiquer que les options ont été mises à jour
+                            optionsUpdated = true;
+
+                            // Mettre à jour les champs en fonction de la valeur de Order Status
+                            updateFieldsBasedOnOrderStatus();
+                        },
+                        error: function (xhr, status, error) {
+                            console.error('Error fetching order statuses:', error);
+                        }
+                    });
+                }
+
+                $.ajax({
+                    url: 'http://localhost:8080/v1.0/orders/' + accountNo + '/' + orderId,
+                    type: 'GET',
+                    dataType: 'json',
+                    success: function (data) {
+                        var orderStatusName = data[0].orderStatus.orderStatusName;
+                        var placedTimestamp = data[0].placedTimestamp;
+                        $('#placedTimestampInput input').val(placedTimestamp);
+
+                        // Vérifier si le statut de la commande correspond à une des options du menu déroulant
+                        var orderStatusSelect = $('#orderStatusSelect');
+                        var orderStatusOptions = orderStatusSelect.find('option');
+                        var matchedOption = orderStatusOptions.filter(function () {
+                            return $(this).text() === orderStatusName;
+                        });
+
+                        // Si une correspondance est trouvée, sélectionner cette option
+                        if (matchedOption.length > 0) {
+                            matchedOption.prop('selected', true);
+                        } else {
+                            // Si aucune correspondance n'est trouvée, afficher un message d'erreur dans la console
+                            console.error('No matching option found for order status:', orderStatusName);
+                            // Vous pouvez également sélectionner l'option par défaut ici, ou laisser le menu déroulant vide
+                        }
+
+                        // Mettre à jour les options et les champs en fonction de la valeur de Order Status
+                        updateFieldsBasedOnOrderStatus();
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('Error fetching order status:', error);
+                    }
+                });
+            }
+
+            // Mettre à jour les options des menus déroulants une fois les données de l'API récupérées
+            updateDropdownOptions();
+
+            // Fonction pour mettre à jour les boutons
+            updateModifyButtonState();
+
+            var isModified = false;
+
+            function detectModifications() {
+                var originalOrderStatus = $('#orderStatusSelect').val();
+                var originalDeliveredTimestamp = $('#deliveredTimestampInput input').val();
+                var originalCancelledTimestamp = $('#cancelledTimestampInput input').val();
+
+                // Surveiller les changements dans le menu déroulant "Order Status"
+                $('#orderStatusSelect').on('change', function() {
+                    if ($(this).val() !== originalOrderStatus) {
+                        isModified = true;
+                        updateModifyButtonState();
+                    }
+                });
+
+                // Surveiller les changements dans le champ "Delivered Timestamp"
+                $('#deliveredTimestampInput input').on('input change', function() {
+                    if ($(this).val() !== originalDeliveredTimestamp) {
+                        isModified = true;
+                        updateModifyButtonState();
+                    }
+                });
+
+                // Surveiller les changements dans le champ "Cancelled Timestamp"
+                $('#cancelledTimestampInput input').on('input change', function() {
+                    if ($(this).val() !== originalCancelledTimestamp) {
+                        isModified = true;
+                        updateModifyButtonState();
+                    }
+                });
+            }
+
+            // Fonction pour mettre à jour les boutons en fonction du nombre de lignes dans la table "Order Details"
+            function updateModifyButtonState() {
+                if (isModified) {
+                    $("#modifyBtn").prop("disabled", false).css("cursor", "default");
+                } else {
+                    $("#modifyBtn").prop("disabled", true).css("cursor", "default");
+                }
+            }
+
+            detectModifications();
+
+            // Fonction pour mettre à jour les champs en fonction de la valeur de Order Status
+            function updateFieldsBasedOnOrderStatus() {
+                var orderStatus = $('#orderStatusSelect').val();
+                if (orderStatus === '5' || orderStatus === '6') {
+                    // Si Order Status est DELIVERED ou CANCELLED, pré-remplir les champs Delivered Timestamp et Cancelled Timestamp
+                    $.ajax({
+                        url: 'http://localhost:8080/v1.0/orders/' + accountNo + '/' + orderId,
+                        type: 'GET',
+                        dataType: 'json',
+                        success: function (data) {
+                            var order = data[0];
+                            var deliveredTimestamp = order.deliveredTimestamp;
+                            $('#deliveredTimestampInput input').val(deliveredTimestamp);
+                            var cancelledTimestamp = order.cancelledTimestamp;
+                            $('#cancelledTimestampInput input').val(cancelledTimestamp);
+
+                        },
+                        error: function (xhr, status, error) {
+                            console.error('Error fetching order status:', error);
+                        }
+                    });
+
+                    // Désactiver les champs Delivered Timestamp et Cancelled Timestamp
+                    $('#deliveredTimestampInput input').prop('disabled', true);
+                    $('#cancelledTimestampInput input').prop('disabled', true);
+                    $('#orderStatusSelect').prop('disabled', true);
+                } else if (orderStatus < '5' || orderStatus >= '1') {
+                    $('#deliveredTimestampInput input').prop('disabled', true).val('');
+                    $('#cancelledTimestampInput input').prop('disabled', true).val('');
+                    $('#orderStatusSelect').prop('disabled', false);
+                } else {
+                    // Sinon, activer les champs Delivered Timestamp et Cancelled Timestamp
+                    $('#deliveredTimestampInput input').prop('disabled', false).val('');
+                    $('#cancelledTimestampInput input').prop('disabled', false).val('');
+                    $('#orderStatusSelect').prop('disabled', false);
+                }
+            }
+
+            // Événement de changement pour le menu déroulant Order Status
+            $('#orderStatusSelect').on('change', function() {
+                var selectedStatus = $(this).val();
+                if (selectedStatus === '5' || selectedStatus === '6') {
+                    // Si l'utilisateur sélectionne DELIVERED ou CANCELLED, pré-remplir et activer les champs appropriés
+                    var currentTimestamp = new Date().toISOString().slice(0,16).replace("T", " ");
+                    if (selectedStatus === '5') {
+                        // Si DELIVERED est sélectionné, pré-remplir et activer le champ Delivered Timestamp
+                        $('#deliveredTimestampInput input').val(currentTimestamp).prop('disabled', false);
+                        // Désactiver le champ Cancelled Timestamp
+                        $('#cancelledTimestampInput input').prop('disabled', true).val('');
+                    } else if (selectedStatus === '6') {
+                        // Si CANCELLED est sélectionné, pré-remplir et activer le champ Cancelled Timestamp
+                        $('#cancelledTimestampInput input').val(currentTimestamp).prop('disabled', false);
+                        // Désactiver le champ Delivered Timestamp
+                        $('#deliveredTimestampInput input').prop('disabled', true).val('');
+                    }
+                } else {
+                    // Si un autre statut est sélectionné, activer le champ Order Status
+                    $(this).prop('disabled', false);
+                    // Vider les champs Delivered Timestamp et Cancelled Timestamp et les désactiver
+                    $('#deliveredTimestampInput input, #cancelledTimestampInput input').prop('disabled', true).val('');
+                }
+            });
+
+            function loadOrderDetails() {
+                // Récupérer les détails de la commande
+                $.ajax({
+                    url: 'http://localhost:8080/v1.0/orders/' + orderId + '/orderDetails',
+                    type: 'GET',
+                    success: function (orderDetails) {
+                        var productPrices = getProductPrices();
+                        $('#orderDetailsTable tbody').empty();
+                        // Pour chaque détail de commande, récupérer le nom du produit correspondant
+                        orderDetails.forEach(function (orderDetail) {
+                            $.ajax({
+                                url: 'http://localhost:8080/v1.0/products',
+                                type: 'GET',
+                                success: function (products) {
+                                    var productName = '';
+                                    products.forEach(function (product) {
+                                        if ((products[orderDetail.productId].productId - 1) === orderDetail.productId) {
+                                            productName = products[orderDetail.productId - 1].productName;
+                                        }
+                                    });
+                                    // Ajouter le détail de commande à la table
+                                    var row = '<tr>' +
+                                        '<td class="text-center">' + orderDetail.productId + '</td>' +
+                                        '<td class="text-center">' + productName + '</td>' +
+                                        '<td class="text-center">' + orderDetail.quantity + '</td>' +
+                                        '</tr>';
+                                    $('#orderDetailsTable tbody').append(row);
+                                },
+                                error: function (xhr, status, error) {
+                                    console.error('Error fetching product names:', error);
+                                }
+                            });
+                        });
+                        var orderTotal = calculateOrderTotal(orderDetails, productPrices);
+                        $('#orderTotal').val(orderTotal.toFixed(2)); // Afficher le prix avec deux décimales
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('Error fetching order details:', error);
+                    }
+                });
+            }
+
+            loadOrderDetails()
+
+            function getProductPrices() {
+                var productPrices = {};
+                $.ajax({
+                    url: 'http://localhost:8080/v1.0/products',
+                    type: 'GET',
+                    async: false, // Attendre la fin de la requête avant de continuer
+                    success: function (products) {
+                        products.forEach(function (product) {
+                            productPrices[product.productId] = product.price;
+                        });
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('Error fetching product prices:', error);
+                    }
+                });
+                return productPrices;
+            }
+
+            function calculateOrderTotal(orderDetails, productPrices) {
+                var total = 0;
+                orderDetails.forEach(function (orderDetail) {
+                    var productId = orderDetail.productId;
+                    var productPrice = productPrices[productId];
+                    total += productPrice * orderDetail.quantity;
+                });
+                return total;
+            }
+
+            $("#orderDetailsTable").on("input", ".quantity", function () {
+                var quantityValue = parseInt($(this).val());
+                if (quantityValue < 1 || isNaN(quantityValue)) {
+                    $(this).val(1);
+                }
+            });
+
+            $('#modifyBtn').on('click', function () {
+                var orderId = $('input[type="number"]').val(); // Récupérer l'ID de la commande
+                var accountNo = parts[parts.length - 3]; // Récupérer le numéro de compte à partir de l'URL
+
+                // Récupérer les données de l'utilisateur
+                $.ajax({
+                    url: 'http://localhost:8080/v1.0/customers/' + accountNo,
+                    type: 'GET',
+                    success: function(customerData) {
+                        // Succès de la requête
+                        var customersData = {
+                            accountNo: customerData.accountNo,
+                            email: customerData.email,
+                            firstName: customerData.firstName,
+                            lastName: customerData.lastName,
+                            registrationTimestamp: customerData.registrationTimestamp
+                        };
+                        processOrderData(orderId, customersData); // Appeler la fonction pour traiter les données de commande
+                    },
+                    error: function(xhr, status, error) {
+                        // Erreur lors de la requête
+                        console.error('Error fetching customer data:', error);
+                    }
+                });
+            });
+
+            // Fonction pour traiter les données de commande
+            function processOrderData(orderId, customersData) {
+                var orderStatusSelect = $('#orderStatusSelect');
+                var orderStatusId = orderStatusSelect.val();
+                var orderStatusName = orderStatusSelect.find('option:selected').text();
+                var placedTimestamp = $('#placedTimestampInput input').val();
+                var deliveredTimestamp = $('#deliveredTimestampInput input').val();
+                var cancelledTimestamp = $('#cancelledTimestampInput input').val();
+
+                // Créer l'objet OrderDto avec les données récupérées
+                var orderDto = {
+                    orderId: orderId,
+                    customer: customersData,
+                    orderStatus: {
+                        orderStatusId: orderStatusId,
+                        orderStatusName: orderStatusName
+                    },
+                    placedTimestamp: placedTimestamp,
+                    deliveredTimestamp: deliveredTimestamp ? new Date(deliveredTimestamp).toISOString() : null,
+                    cancelledTimestamp: cancelledTimestamp ? new Date(cancelledTimestamp).toISOString() : null
+                };
+
+                // Convertir l'objet OrderDto en JSON
+                var jsonOrderDto = JSON.stringify(orderDto);
+                console.log(jsonOrderDto)
+                // Envoyer les données de commande au serveur
+                $.ajax({
+                    url: 'http://localhost:8080/v1.0/orders',
+                    type: 'PUT',
+                    contentType: 'application/json',
+                    data: jsonOrderDto,
+                    success: function(response) {
+                        console.log('Order updated:', response);
+                        window.location.href = 'http://localhost:8081/v1.0/customers/' + accountNo;
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error updating order:', error);
+                        // Gérer les erreurs de mise à jour de commande
+                    }
+                });
+            }
+        });
+    </script>
+
+</head>
+<body>
+<div class="custom-header">
+    <h1>Order Form</h1>
+</div>
+
+<div class="container">
+    <div class="table-container-left">
+        <table>
+            <tr>
+                <td class="text-center">Order Number</td>
+                <td class="text-center"><input type="number" th:value="${orderId}" readonly></td>
+            </tr>
+            <tr>
+                <td class="text-center">Account No</td>
+                <td class="text-center"><input type="text" th:value="${accountNo}" readonly></td>
+            </tr>
+            <tr>
+                <td class="text-center">Order Status</td>
+                <td>
+                    <select  id="orderStatusSelect">
+                    </select>
+                </td>
+            </tr>
+            <tr>
+                <td class="text-center">Placed Timestamp</td>
+                <td class="text-center" id="placedTimestampInput"><input type="datetime-local" disabled></td>
+            </tr>
+            <tr>
+                <td class="text-center">Delivered Timestamp</td>
+                <td class="text-center" id="deliveredTimestampInput"><input type="datetime-local" disabled></td>
+            </tr>
+            <tr>
+                <td class="text-center">Cancelled Timestamp</td>
+                <td class="text-center" id="cancelledTimestampInput"><input type="datetime-local" disabled></td>
+            </tr>
+            <tr>
+                <td class="text-center">Order total</td>
+                <td class="text-center"><input type="number" id="orderTotal" disabled></td>
+            </tr>
+        </table>
+    </div>
+    <div class="table-container-right">
+        <h2 class="mt-5">Order Details</h2>
+        <table id="orderDetailsTable" class="table">
+            <thead>
+            <tr>
+                <th class="text-center product-code-column">Product Code</th>
+                <th class="text-center product-name-column">Product Name</th>
+                <th class="text-center quantity-column">Quantity</th>
+            </tr>
+            </thead>
+            <tbody>
+            <!-- Les données du tableau des détails de la commande peuvent être insérées dynamiquement ici -->
+            </tbody>
+        </table>
+        <button id="modifyBtn" class="btn btn-primary mt-3">Modify</button>
+    </div>
+</div>
+</body>
+</html>

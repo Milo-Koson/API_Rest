@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Order Form</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+  <style>
+    body {
+      font-family: 'Courier New', sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+
+    .custom-header {
+      background-color: #61dafb;
+      padding: 50px 20px; /* Ajustez la hauteur de la section selon vos besoins */
+      color: #fff;
+    }
+
+    .custom-header h1 {
+      margin: 0;
+      font-size: 36px;
+    }
+
+    input, select {
+      padding: 8px;
+      margin: 10px;
+      width: calc(100% - 20px); /* Prendre en compte la marge */
+    }
+
+    button {
+      padding: 8px;
+      cursor: pointer;
+    }
+
+    .container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      padding: 12px;
+      text-align: left;
+      border: none;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      border-bottom: 2px solid #ddd;
+    }
+
+    tr:hover {
+      background-color: #f2f9fe;
+    }
+
+    .no-results {
+      color: #d9534f;
+      font-weight: bold;
+    }
+
+    .quantity-column {
+      width: 20%; /* Ajuste la largeur de la colonne Quantity */
+    }
+
+    .table-container-left {
+      width: 40%; /* Ajuste la largeur de la table container gauche */
+      float: left; /* Aligne la table container gauche sur la partie gauche de la page */
+      margin-right: 150px; /* Ajoute une marge à droite pour l'espace */
+    }
+
+    .table-container-right {
+      width: 100%; /* Ajuste la largeur de la table container droite */
+      float: right; /* Aligne la table container droite sur la partie droite de la page */
+      margin-left: 10px; /* Ajoute une marge à gauche pour l'espace */
+    }
+
+  </style>
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+  <script>
+    // Stocker les options des menus déroulants au chargement de la page
+    var productCodeOptions;
+    var productNameOptions;
+
+    $(document).ready(function() {
+      // Mettre à jour les options des menus déroulants une seule fois au chargement de la page
+      updateDropdownOptions();
+
+      // Fonction pour mettre à jour les boutons
+      updateButtonStates();
+
+      // Ajouter une nouvelle ligne dans la table "Order Details"
+      $("#addRowBtn").click(function() {
+        var rowCount = $("#orderDetailsTable tbody tr").length;
+        if (rowCount < 8) {
+          // Ajouter une nouvelle ligne avec les options des menus déroulants sauvegardées
+          var newRow = "<tr><td><select class='product-code-dropdown'>" + productCodeOptions + "</select></td><td><select class='product-name-dropdown'>" + productNameOptions + "</select></td><td><input type='number' class='quantity' value='1'></td></tr>";
+          $("#orderDetailsTable tbody").append(newRow);
+          updateButtonStates();
+        }
+      });
+
+      // Supprimer la dernière ligne dans la table "Order Details"
+      $("#removeRowBtn").click(function() {
+        $("#orderDetailsTable tbody tr:last").remove();
+        updateButtonStates();
+      });
+
+      // Fonction pour mettre à jour les boutons en fonction du nombre de lignes dans la table "Order Details"
+      function updateButtonStates() {
+        var rowCount = $("#orderDetailsTable tbody tr").length;
+        if (rowCount === 0) {
+          $("#removeRowBtn").prop("disabled", true).css("cursor", "default");
+          $("#saveBtn").prop("disabled", true).css("cursor", "default");
+        } else if (rowCount === 8) {
+          $("#addRowBtn").prop("disabled", true).css("cursor", "default");
+        } else {
+          $("#removeRowBtn").prop("disabled", false).css("cursor", "pointer");
+          $("#addRowBtn").prop("disabled", false).css("cursor", "pointer");
+          $("#saveBtn").prop("disabled", false).css("cursor", "pointer");
+        }
+      }
+
+      // Fonction pour mettre à jour les options des menus déroulants
+      function updateDropdownOptions() {
+        $.ajax({
+          url: 'http://localhost:8080/v1.0/products',
+          type: 'GET',
+          success: function(data) {
+            // Stocker les données des produits dans les variables globales
+            productCodeOptions = data.map(function(product) {
+              return '<option value="' + product.productId + '">' + product.productId + '</option>';
+            }).join('');
+            productNameOptions = data.map(function(product) {
+              return '<option value="' + product.productName + '">' + product.productName + '</option>';
+            }).join('');
+          },
+          error: function(xhr, status, error) {
+            console.error('Error fetching product names:', error);
+          }
+        });
+      }
+
+      // Événement de changement pour le menu déroulant productCode
+      $(document).on("change", ".product-code-dropdown", function() {
+        var selectedProductId = $(this).val();
+        var productNameDropdown = $(this).closest("tr").find(".product-name-dropdown");
+
+        // Trouver l'index du produit dans le menu déroulant product-code-dropdown
+        var selectedIndex = $(this).prop('selectedIndex');
+
+        // Trouver le nom du produit associé à l'index
+        var selectedProductName = productNameDropdown.find('option').eq(selectedIndex).text();
+
+        // Sélectionner automatiquement l'option correspondante dans le menu déroulant productName
+        productNameDropdown.val(selectedProductName);
+      });
+
+      $(document).on("change", ".product-name-dropdown", function() {
+        var selectedProductName = $(this).val();
+        var productCodeDropdown = $(this).closest("tr").find(".product-code-dropdown");
+
+        // Trouver l'index du produit dans le menu déroulant product-name-dropdown
+        var selectedIndex = $(this).prop('selectedIndex');
+
+        // Trouver le code du produit associé à l'index
+        var selectedProductCode = productCodeDropdown.find('option').eq(selectedIndex).val();
+
+        // Sélectionner automatiquement l'option correspondante dans le menu déroulant productCode
+        productCodeDropdown.val(selectedProductCode);
+      });
+
+
+      $("#orderDetailsTable").on("input", ".quantity", function() {
+        var quantityValue = parseInt($(this).val());
+        if (quantityValue < 1 || isNaN(quantityValue)) {
+          $(this).val(1);
+        }
+      });
+
+      $('#saveBtn').on('click', function () {
+        // Récupérer le dernier orderId depuis la page /orders et l'incrémenter
+        var orderId = parseInt(getLastOrderId()) + 1;
+        var orderDetailId = parseInt(getLastOrderDetailId());
+        var url = window.location.href; // Obtenir l'URL actuelle
+        var parts = url.split('/'); // Diviser l'URL en parties en utilisant le slash comme séparateur
+        var accountNo = parts[parts.length - 2];
+
+        var currentDate = new Date();
+        var placedTimestamp = currentDate.toISOString().slice(0, 16);
+        var cancelledTimestamp = null;
+        var deliveredTimestamp = null;
+
+        var orderStatus = {
+          orderStatusId: 1,
+          orderStatusName: "PLACED"
+        };
+
+        $.ajax({
+          url: 'http://localhost:8080/v1.0/customers/' + accountNo,
+          type: 'GET',
+          success: function(customerData) {
+            // Succès de la requête
+            var customersData = {
+              accountNo: customerData.accountNo,
+              email: customerData.email,
+              firstName: customerData.firstName,
+              lastName: customerData.lastName,
+              registrationTimestamp: customerData.registrationTimestamp
+            };
+            processOrderData(orderId, customersData, orderStatus, placedTimestamp, deliveredTimestamp, cancelledTimestamp, orderDetailId);
+          },
+          error: function(xhr, status, error) {
+            // Erreur lors de la requête
+            console.error('Error fetching customer data:', error);
+          }
+        });
+      });
+
+      function processOrderData(orderId, customersData, orderStatus, placedTimestamp, deliveredTimestamp, cancelledTimestamp, orderDetailId) {
+        var orderData = {
+          orderId: orderId,
+          customer: {
+            accountNo: customersData.accountNo,
+            email: customersData.email,
+            firstName: customersData.firstName,
+            lastName: customersData.lastName,
+            registrationTimestamp: customersData.registrationTimestamp
+          },
+          orderStatus: {
+            orderStatusId: orderStatus.orderStatusId,
+            orderStatusName: orderStatus.orderStatusName
+          },
+          placedTimestamp: placedTimestamp,
+          deliveredTimestamp: deliveredTimestamp,
+          cancelledTimestamp: cancelledTimestamp
+        };
+
+        var jsonOrderData = JSON.stringify(orderData);
+
+        // Envoyer la requête POST pour créer une commande
+        $.ajax({
+          url: 'http://localhost:8080/v1.0/orders',
+          type: 'POST',
+          contentType: 'application/json',
+          data: jsonOrderData,
+          success: function(response) {
+            console.log('Order created :', response);
+            // Une fois la commande créée avec succès, créer les détails de la commande
+            createOrderDetails(orderId, orderDetailId);
+          },
+          error: function(xhr, status, error) {
+            console.error('Erreur lors de la requête (Order creation) :', error);
+          }
+        });
+      }
+
+      function createOrderDetails(orderId, orderDetailId) {
+        var url = window.location.href; // Obtenir l'URL actuelle
+        var parts = url.split('/');
+        var accountNo = parts[parts.length - 2];
+        var orderDetails = [];
+        $('#orderDetailsTable tbody tr').each(function () {
+          var productId = $(this).find('.product-code-dropdown').val();
+          var quantity = $(this).find('.quantity').val();
+
+          var orderDetail = {
+            orderDetailId: orderDetailId, // Utiliser le même orderDetailId pour tous les détails de commande
+            orderId: { orderId: orderId },
+            productId: parseInt(productId), // Convertir en nombre entier
+            quantity: parseInt(quantity) // Convertir en nombre entier
+          };
+
+          orderDetails.push(orderDetail);
+        });
+
+        var jsonOrderDetailsData = JSON.stringify(orderDetails);
+
+        // Envoyer la requête POST pour créer les détails de la commande
+        $.ajax({
+          url: 'http://localhost:8080/v1.0/orders/' + orderId + '/orderDetails',
+          type: 'POST',
+          contentType: 'application/json',
+          data: jsonOrderDetailsData,
+          success: function(response) {
+            console.log('Order Details created :', response);
+            window.location.href = 'http://localhost:8081/v1.0/customers/' + accountNo;
+          },
+          error: function(xhr, status, error) {
+            console.error('Erreur lors de la requête (OrderDetails creation) :', error);
+          }
+        });
+    }
+
+      function getLastOrderId() {
+        var lastOrderId;
+        $.ajax({
+          url: 'http://localhost:8080/v1.0/orders',
+          type: 'GET',
+          async: false,
+          success: function (data) {
+            lastOrderId = Math.max(...data.map(order => order.orderId));
+          },
+          error: function (xhr, status, error) {
+            console.error('Error fetching last orderId:', error);
+          }
+        });
+        return lastOrderId;
+      }
+
+      function getLastOrderDetailId(){
+        var lastOrderDetailId;
+        $.ajax({
+          url: 'http://localhost:8080/v1.0/orderDetails',
+          type: 'GET',
+          async: false,
+          success: function (data) {
+            lastOrderDetailId = Math.max(...data.map(order => order.orderDetailId));
+          },
+          error: function (xhr, status, error) {
+            console.error('Error fetching last orderId:', error);
+          }
+        });
+        return lastOrderDetailId;
+      }
+
+    });
+
+  </script>
+</head>
+<body>
+<div class="custom-header">
+  <h1>Order Form</h1>
+</div>
+
+<div class="container">
+  <div class="table-container-left">
+    <table>
+      <tr>
+        <td class="text-center">Order Number</td>
+        <td class="text-center"><input type="number" th:value="${orderNumber}" readonly></td>
+      </tr>
+      <tr>
+        <td class="text-center">Account No</td>
+        <td class="text-center"><input type="text" id="accountNo" th:value="${accountNo}" readonly></td>
+      </tr>
+      <tr>
+        <td class="text-center">Order Status</td>
+        <td>
+          <select disabled>
+            <option value="PLACED" selected>PLACED</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td class="text-center">Placed Timestamp</td>
+        <td class="text-center"><input type="datetime-local" disabled></td>
+      </tr>
+      <tr>
+        <td class="text-center">Delivered Timestamp</td>
+        <td class="text-center"><input type="datetime-local" disabled></td>
+      </tr>
+      <tr>
+        <td class="text-center">Cancelled Timestamp</td>
+        <td class="text-center"><input type="datetime-local" disabled></td>
+      </tr>
+      <tr>
+        <td class="text-center">Order total</td>
+        <td class="text-center"><input type="number" disabled></td>
+      </tr>
+    </table>
+  </div>
+  <div class="table-container-right">
+    <h2 class="mt-5">Order Details</h2>
+    <table id="orderDetailsTable" class="table">
+      <thead>
+      <tr>
+        <th class="text-center product-code-column">Product Code</th>
+        <th class="text-center product-name-column">Product Name</th>
+        <th class="text-center quantity-column">Quantity</th>
+      </tr>
+      </thead>
+      <tbody>
+      <!-- Les données du tableau des détails de la commande peuvent être insérées dynamiquement ici -->
+      </tbody>
+    </table>
+    <div class="text-center mt-3">
+      <button id="addRowBtn" class="btn btn-primary">+</button>
+      <button id="removeRowBtn" class="btn btn-primary">-</button>
+    </div>
+    <button id="saveBtn" class="btn btn-primary mt-3">Save</button>
+  </div>
+</div>
+</body>
+</html>

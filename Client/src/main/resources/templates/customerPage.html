@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Customer Details</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: 'Courier New', sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+        }
+
+        .custom-header {
+            background-color: #61dafb;
+            padding: 50px 20px; /* Ajustez la hauteur de la section selon vos besoins */
+            color: #fff;
+        }
+
+        .custom-header h1 {
+            margin: 0;
+            font-size: 36px;
+        }
+
+        input {
+            padding: 8px;
+            margin: 10px;
+        }
+
+        button {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        table {
+            width: 60%;
+            margin: 20px auto;
+            border-collapse: collapse;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border: none;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            border-bottom: 2px solid #ddd;
+        }
+
+        tr:hover {
+            background-color: #f2f9fe;
+        }
+
+        .no-results {
+            color: #d9534f;
+            font-weight: bold;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+</head>
+<body>
+<div class="custom-header">
+    <h1>Customer Details</h1>
+</div>
+
+<table>
+    <tr>
+        <td>Customer ID :</td>
+        <td id="customerId"></td>
+    </tr>
+    <tr>
+        <td>Account No :</td>
+        <td id="accountNo"></td>
+    </tr>
+    <tr>
+        <td>First Name :</td>
+        <td id="firstName"></td>
+    </tr>
+    <tr>
+        <td>Last Name :</td>
+        <td id="lastName"></td>
+    </tr>
+    <tr>
+        <td>Email :</td>
+        <td id="email"></td>
+    </tr>
+    <tr>
+        <td>Registration Timestamp :</td>
+        <td id="registrationTimestamp"></td>
+    </tr>
+</table>
+
+<h2>Orders</h2>
+
+<table id="ordersTable">
+    <thead>
+    <tr>
+        <th class="text-center">Order Number</th>
+        <th class="text-center">Order Date</th>
+        <th class="text-center">Order Status</th>
+    </tr>
+    </thead>
+    <tbody>
+
+    </tbody>
+</table>
+
+<div class="pagination-container">
+    <ul class="pagination justify-content-center"></ul>
+</div>
+
+<div class="text-center mt-3">
+    <button class="btn btn-primary" id="newOrderBtn">New Order</button>
+</div>
+
+<script>
+    $(document).ready(function () {
+        var path = window.location.pathname;
+        var parts = path.split('/');
+        var accountNo = parts[parts.length - 1]; // Le dernier élément de la partie est l'accountNo
+
+        // Fonction pour récupérer les détails du client via AJAX
+        $.ajax({
+            url: 'http://localhost:8080/v1.0/customers/' + accountNo,
+            type: 'GET',
+            dataType: 'json',
+            success: function (customerData) {
+                // Mettre à jour les détails du client dans le tableau
+                $('#customerId').text(customerData.id);
+                $('#accountNo').text(customerData.accountNo);
+                $('#firstName').text(customerData.firstName);
+                $('#lastName').text(customerData.lastName);
+                $('#email').text(customerData.email);
+                $('#registrationTimestamp').text(customerData.registrationTimestamp);
+            },
+            error: function (error) {
+                console.error("Error fetching customer details:", error);
+            }
+        });
+
+        // Fonction pour récupérer les commandes et les statuts de commande
+        $.ajax({
+            url: 'http://localhost:8080/v1.0/orders/' + accountNo,
+            type: 'GET',
+            dataType: 'json',
+            success: function (ordersData) {
+                fetchOrderStatuses(ordersData);
+            },
+            error: function (error) {
+                console.error("Error fetching orders:", error);
+            }
+        });
+
+        function fetchOrderStatuses(ordersData) {
+            $.ajax({
+                url: 'http://localhost:8080/v1.0/orders/orderStatuses',
+                type: 'GET',
+                dataType: 'json',
+                success: function (orderStatusesData) {
+                    updateOrdersTable(ordersData, orderStatusesData);
+                },
+                error: function (error) {
+                    console.error("Error fetching order statuses:", error);
+                }
+            });
+        }
+
+        function updateOrdersTable(ordersData, orderStatusesData) {
+            var ordersTableBody = $("#ordersTable tbody");
+            var paginationContainer = $(".pagination-container ul");
+            var pageSize = 5; // Nombre de commandes par page
+            var pageCount = Math.ceil(ordersData.length / pageSize);
+
+            ordersTableBody.empty();
+            paginationContainer.empty();
+
+            ordersData.sort(function(a, b) {
+                // Trie par état de commande (Order Status) en ordre croissant
+                if (a.orderStatus < b.orderStatus) return -1;
+                if (a.orderStatus > b.orderStatus) return 1;
+                // Si l'état de commande est le même, trie par date de commande (Order Date) en ordre décroissant
+                if (a.placedTimestamp < b.placedTimestamp) return 1;
+                if (a.placedTimestamp > b.placedTimestamp) return -1;
+                return 0;
+            });
+
+            // Parcourt les données des commandes pour la pagination
+            for (var i = 0; i < pageCount; i++) {
+                paginationContainer.append("<li class='page-item'><a class='page-link' href='#'>" + (i + 1) + "</a></li>");
+            }
+
+            // Afficher la première page par défaut
+            displayPage(1);
+
+            // Fonction pour afficher une page spécifique
+            // Fonction pour afficher une page spécifique
+            function displayPage(page) {
+                ordersTableBody.empty();
+
+                var start = (page - 1) * pageSize;
+                var end = start + pageSize;
+                var ordersOnPage = ordersData.slice(start, end);
+
+                // Parcourt les données des commandes et les ajoute à la table
+                $.each(ordersOnPage, function (index, order) {
+                    var orderNumber = order.orderId;
+                    var orderDate = order.placedTimestamp;
+                    var orderStatusName = order.orderStatus.orderStatusName; // Obtenez le nom de l'état de commande
+
+                    // Ajoute une nouvelle ligne à la table des commandes
+                    var newRow = $("<tr>").appendTo(ordersTableBody);
+                    $("<td class=\"text-center\">").text(orderNumber).appendTo(newRow);
+                    $("<td class=\"text-center\">").text(orderDate).appendTo(newRow);
+                    $("<td class=\"text-center\">").text(orderStatusName).appendTo(newRow);
+                });
+
+                // Mettre à jour l'état actif de la pagination
+                paginationContainer.find("li").removeClass("active");
+                paginationContainer.find("li:nth-child(" + page + ")").addClass("active");
+            }
+
+            // Gestionnaire d'événements pour changer de page
+            paginationContainer.on("click", "li", function () {
+                var page = $(this).text();
+                displayPage(parseInt(page));
+            });
+        }
+
+        $('#ordersTable').on('click', 'tbody tr', function () {
+            var orderNumber = $(this).find('td:eq(0)').text();
+            var orderDate = $(this).find('td:eq(1)').text();
+            var orderStatus = $(this).find('td:eq(2)').text();
+
+            window.location.href = "http://localhost:8081/v1.0/customers/" + accountNo + "/" + orderNumber +"/existingOrder";
+        });
+
+        // Gestionnaire d'événements pour le bouton Nouvelle commande
+        $('#newOrderBtn').on('click', function () {
+            var newOrderUrl = "http://localhost:8081/v1.0/customers/" + accountNo + "/newOrder";
+            window.location.href = newOrderUrl;
+        });
+    });
+</script>
+</body>
+</html>
